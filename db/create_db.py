@@ -19,6 +19,7 @@ class City(Base):
     __tablename__ = 'city'
     id = sq.Column(sq.Integer, primary_key=True)
     name = sq.Column(sq.String(length=40))
+    surname = sq.Column(sq.String(length=40))
     # like_users = sq.Column(sq.Integer, sq.ForeignKey('like_users.id'), nullable=False)
 
     def __str__(self):
@@ -43,6 +44,7 @@ class Info_user(Base):
     user = relationship(Like_users, backref='users')
     image = relationship(Image, backref='image')
     city = relationship(City, backref='city')
+
 
 def create_tables(engine):
     # Base.metadata.drop_all(engine)
