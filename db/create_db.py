@@ -41,6 +41,7 @@ class Info_user(Base):
     user_id = sq.Column(sq.Integer, sq.ForeignKey('like_users.id'), nullable=False)
     city_id = sq.Column(sq.Integer, sq.ForeignKey('city.id'), nullable=False)
     image_id = sq.Column(sq.Integer, sq.ForeignKey('image.id'), nullable=False)
+    client_id = sq.Column(sq.Integer, sq.ForeignKey('image.id'), nullable=False)
     user = relationship(Like_users, backref='users')
     image = relationship(Image, backref='image')
     city = relationship(City, backref='city')
