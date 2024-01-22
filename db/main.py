@@ -1,20 +1,10 @@
-import sqlalchemy
-from sqlalchemy import text
-from sqlalchemy.orm import sessionmaker
-import psycopg2
+from db.functions import add_info_db
+from db.config import session
 
-from create_db import *
-
-DSN = "postgresql://postgres:postgres@localhost:5432/familiarity_bot"
-engine = sqlalchemy.create_engine(DSN)
-create_tables(engine)
-con = engine.connect()
-
-Session = sessionmaker(bind=engine)
-session = Session()
-
-query = session.query(City.name).all()
-print(query)
+add_info_db('Sava2', 'Cher2', 1232, 'https://sdfsdf/')
+# add_user = Like_users(name='Sava', surname='Cher', user_id_vk=123)
+# query = session.query(City.name).all()
+# print(query)
 
 session.commit()
 session.close()
