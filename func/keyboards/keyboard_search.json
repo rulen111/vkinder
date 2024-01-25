@@ -1,0 +1,25 @@
+{
+  "one_time":false,
+  "buttons":[
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"search_start\"}",
+          "label":"Начать поиск"
+        },
+        "color":"default"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"main_menu\"}",
+          "label":"Главное меню"
+        },
+        "color":"negative"
+      }
+    ]
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "one_time":false,
+  "buttons":[
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"authorize\"}",
+          "label":"Авторизация"
+        },
+        "color":"default"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"search\"}",
+          "label":"Поиск"
+        },
+        "color":"default"
+      }
+    ]
+  ]
+}
