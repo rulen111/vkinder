@@ -26,9 +26,18 @@ KB_AUTHORIZE = "func/keyboards/keyboard_authorize.json"
 
 logging.basicConfig(level=logging.INFO, filename=f'logs/{datetime.datetime.now().date()}.txt',
                     filemode="a", format="%(asctime)s %(levelname)s %(message)s", encoding='UTF-8')
-logging.info('-' * 80)
-logging.info(f'Starting at {datetime.datetime.now()}')
-logging.info('-' * 80)
+logging.info("\n" + "-" * 80)
+logging.info(f"Starting VKinder Bot")
+logging.info("-" * 80)
+
+
+def logger(old_func):
+    def new_func(*args, **kwargs):
+        logging.info(f"Calling '{old_func.__name__}'")
+        result = old_func(*args, **kwargs)
+        return result
+
+    return new_func
 
 
 def calculate_age(born):
@@ -45,6 +54,7 @@ def write_auth_link_kb(app_id, scope, version):
                 f"redirect_uri={redirect_uri}&scope={scope}&"
                 f"response_type={response_type}&v={version}")
 
+    logging.info(f"Writing links into keyboard files")
     kb_auth = open(KB_AUTHORIZE, "r", encoding="utf-8")
     kb_auth_json = json.load(kb_auth)
     kb_auth_json["buttons"][0][0]["action"]["link"] = auth_url
@@ -61,6 +71,7 @@ def write_auth_link_kb(app_id, scope, version):
 
 
 class VKClient(vk_api.VkApi):
+    @logger
     def write_msg(self, user_id, message, fields=None):
         values = {'user_id': user_id, 'message': message, 'random_id': randrange(10 ** 7)}
         if fields:
@@ -68,14 +79,17 @@ class VKClient(vk_api.VkApi):
         else:
             self.method('messages.send', values)
 
+    @logger
     def event_answer(self, event_id, user_id, peer_id):
         self.method("messages.sendMessageEventAnswer", {"event_id": event_id, "user_id": user_id,
                                                         "peer_id": peer_id})
 
+    @logger
     def get_user_info(self, user_ids, fields):
         user_info = self.method("users.get", {"user_ids": user_ids, "fields": fields})
         return user_info
 
+    @logger
     def search_users(self, fields):
         params = {
             "sort": 0,
@@ -87,10 +101,12 @@ class VKClient(vk_api.VkApi):
         search_res = self.method("users.search", params)
         return search_res.get("items", [])
 
+    @logger
     def get_city_id(self, city_title):
         city = self.method("database.getCities", {"q": city_title, "need_all": 0})
         return city.get("items", [])[0]
 
+    @logger
     def get_top_photos(self, owner_id, count=3):
         album = self.method("photos.get", {"owner_id": owner_id, "album_id": "profile", "extended": 1})
         photos = []
@@ -106,6 +122,7 @@ class VKClient(vk_api.VkApi):
 
 
 class VKhandler:
+    @logger
     def __init__(self, group_client: VKClient, user_client: VKClient = None,
                  search_fields: dict = {}, search_results: dict = {}, position=0):
         self.client = group_client
@@ -116,6 +133,7 @@ class VKhandler:
 
         write_auth_link_kb(VK_APP_ID, "photos", VK_VERSION)
 
+    @logger
     def handle_start(self, event):
         self.client.write_msg(event.obj.message['from_id'], f"Для начала работы с ботом необходимо отправить ему "
                                                             f"токен авторизации. Получить токен можно по кнопке "
@@ -124,22 +142,27 @@ class VKhandler:
                                                             f"в поле 'access_token'",
                               {"keyboard": open(KB_AUTHORIZE, 'r', encoding='UTF-8').read()})
 
+    @logger
     def handle_token(self, event):
         self.user_client = VKClient(token=event.obj.message['text'], app_id=VK_APP_ID)
         # self.user_client.auth(reauth=False, token_only=True)
         self.client.write_msg(event.obj.message['from_id'], f"Вы успешно авторизованы",
                               {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
+    @logger
     def handle_random(self, event):
-        self.client.write_msg(event.obj.message['from_id'], f"Если у вас пропала клавиатура, то напишите боту слово 'Начать'",
+        self.client.write_msg(event.obj.message['from_id'],
+                              f"Если у вас пропала клавиатура, то напишите боту слово 'Начать'",
                               {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
 
+    @logger
     def handle_main_menu(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
         self.client.write_msg(event.obj.peer_id, f"Главное меню",
                               {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
+    @logger
     def handle_search(self, event):
         user_info = self.client.get_user_info(event.object.user_id, "bdate,sex,city")[0]
         city = user_info.get("city", {})
@@ -161,11 +184,13 @@ class VKhandler:
                                                     f"{'мужской' if sex == 1 else 'женский'}",
                               {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
 
+    @logger
     def handle_search_start(self, event):
         search_results = self.user_client.search_users(self.search_fields)
         self.search_results = search_results
         self.handle_rotation(event)
 
+    @logger
     def handle_rotation(self, event):
         if self.position < len(self.search_results):
             search_entry = self.search_results[self.position]
@@ -188,35 +213,82 @@ class VKhandler:
                                       {"attachment": attachment,
                                        "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
 
+    @logger
     def handle_next(self, event):
         self.position += 1
         self.handle_rotation(event)
 
+    @logger
     def handle_help(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
         pass
 
+    @logger
     def handle_settings(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
         self.client.write_msg(event.object.user_id, f"Какой параметр вы хотите изменить?",
                               {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
 
+    @logger
     def handle_change_city(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
         self.client.write_msg(event.object.user_id, f"Какой параметр вы хотите изменить?",
                               {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
 
+    @logger
     def handle_change_age(self, event):
         pass
 
+    @logger
     def handle_change_sex(self, event):
         pass
 
+    @logger
     def handle_like(self, event):
         pass
 
+    @logger
     def handle_list_fav(self, event):
         pass
+
+
+@logger
+def start_polling(longpoll, vk_handler):
+    for event in longpoll.listen():
+        if event.type == VkBotEventType.MESSAGE_EVENT:
+            match event.object.payload.get("type", ""):
+                case "main_menu":
+                    vk_handler.handle_main_menu(event)
+                case "search":
+                    vk_handler.handle_search(event)
+                case "search_start":
+                    vk_handler.handle_search_start(event)
+                case "next":
+                    vk_handler.handle_next(event)
+                case "help":
+                    vk_handler.handle_help(event)
+                case "settings":
+                    vk_handler.handle_settings(event)
+                case "change_city":
+                    vk_handler.handle_change_city(event)
+                case "change_age":
+                    vk_handler.handle_change_age(event)
+                case "change_sex":
+                    vk_handler.handle_change_sex(event)
+                case "like":
+                    vk_handler.handle_like(event)
+                case "list_fav":
+                    vk_handler.handle_list_fav(event)
+
+        elif event.type == VkBotEventType.MESSAGE_NEW:
+            if event.from_user:
+                match event.obj.message['text']:
+                    case s if s.startswith("vk1.a."):
+                        vk_handler.handle_token(event)
+                    case "Начать":
+                        vk_handler.handle_start(event)
+                    case _:
+                        vk_handler.handle_random(event)
