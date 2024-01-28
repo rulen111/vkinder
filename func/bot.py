@@ -160,10 +160,18 @@ class VKhandler:
                                              f"photo{photos[1].get('owner_id', 0)}_{photos[1].get('media_id', 0)},"
                                              f"photo{photos[1].get('owner_id', 0)}_{photos[1].get('media_id', 0)}"})
 
-    # def handle_next(self, event):
-    #     self.position += 1
-    #     self.handle_rotation(event)
-    #
-    # def handle_like(self, event):
-    #
+    def handle_next(self, event):
+        self.position += 1
+        self.handle_rotation(event)
 
+    def handle_change_city(self, event):
+        pass
+
+    def handle_change_age(self, event):
+        pass
+
+    def handle_like(self, event):
+        pass
+
+    def handle_list_fav(self, event):
+        pass
