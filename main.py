@@ -1,15 +1,5 @@
-from func.bot import VKClient, VKhandler
-import yaml
+from func.bot import *
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
-
-
-with open("config.yaml") as c:
-    config = yaml.full_load(c)
-
-VK_VERSION = config["VK"]["VERSION"]
-VK_GROUP_TOKEN = config["VK"]["GROUP_TOKEN"]
-VK_GROUP_ID = config["VK"]["GROUP_ID"]
-
 
 if __name__ == "__main__":
     vk_group_client = VKClient(token=VK_GROUP_TOKEN, api_version=VK_VERSION)
@@ -18,19 +8,53 @@ if __name__ == "__main__":
 
     for event in longpoll.listen():
         if event.type == VkBotEventType.MESSAGE_EVENT:
-            if event.object.payload.get("type", "") == "authorize":
-                vk_handler.handle_authorize(event)
-            elif event.object.payload.get("type", "") == "search":
-                vk_handler.handle_search(event)
-            elif event.object.payload.get("type", "") == "search_start":
-                vk_handler.handle_start_search(event)
-            elif event.object.payload.get("type", "") == "main_menu":
-                vk_handler.handle_main_menu(event)
+            match event.object.payload.get("type", ""):
+                case "main_menu":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'main_menu'")
+                    vk_handler.handle_main_menu(event)
+                case "authorize":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'authorize'")
+                    vk_handler.handle_authorize(event)
+                case "search":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'search'")
+                    vk_handler.handle_search(event)
+                case "search_start":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'search_start'")
+                    vk_handler.handle_search_start(event)
+                case "next":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'next'")
+                    vk_handler.handle_next(event)
+                case "help":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'help'")
+                    vk_handler.handle_help(event)
+                case "settings":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'settings'")
+                    vk_handler.handle_settings(event)
+                case "change_city":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'change_city'")
+                    vk_handler.handle_change_city(event)
+                case "change_age":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'change_age'")
+                    vk_handler.handle_change_age(event)
+                case "change_sex":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'change_sex'")
+                    vk_handler.handle_change_sex(event)
+                case "like":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'like'")
+                    vk_handler.handle_like(event)
+                case "list_fav":
+                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'list_fav'")
+                    vk_handler.handle_list_fav(event)
 
         elif event.type == VkBotEventType.MESSAGE_NEW:
             if event.from_user:
-                if event.obj.message['text'].startswith("vk1.a."):
-                    vk_handler.handle_token(event)
-                elif event.obj.message['text'] == "Начать":
-                    vk_handler.handle_start(event)
-
+                match event.obj.message['text']:
+                    case s if s.startswith("vk1.a."):
+                        logging.info(f"[USER_ID {event.obj.message['from_id']}] Handling 'token'")
+                        vk_handler.handle_token(event)
+                    case "Начать":
+                        logging.info(f"[USER_ID {event.obj.message['from_id']}] Handling 'Начать'")
+                        vk_handler.handle_start(event)
+                    case _:
+                        logging.info(f"[USER_ID {event.obj.message['from_id']}] Handling 'random message'")
+                        vk_handler.handle_random(event)

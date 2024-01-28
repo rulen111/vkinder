@@ -5,18 +5,28 @@
       {
         "action":{
           "type":"callback",
-          "payload":"{\"type\": \"search_start\"}",
-          "label":"Начать поиск"
+          "payload":"{\"type\": \"change_city\"}",
+          "label":"Изменить город"
         },
-        "color":"primary"
+        "color":"default"
       }
     ],
     [
       {
         "action":{
           "type":"callback",
-          "payload":"{\"type\": \"settings\"}",
-          "label":"Настройки"
+          "payload":"{\"type\": \"change_age\"}",
+          "label":"Изменить возраст"
+        },
+        "color":"default"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"change_sex\"}",
+          "label":"Изменить пол"
         },
         "color":"default"
       }
