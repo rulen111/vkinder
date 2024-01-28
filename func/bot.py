@@ -10,10 +10,10 @@ with open("config.yaml") as c:
     config = yaml.full_load(c)
 
 VK_VERSION = config["VK"]["VERSION"]
-VK_GROUP_TOKEN = config["VK"]["GROUP_TOKEN"]
-VK_GROUP_ID = config["VK"]["GROUP_ID"]
+VK_APP_ID = input("Enter your standalone app ID") if not config["VK"]["APP_ID"] else config["VK"]["APP_ID"]
+VK_GROUP_TOKEN = input("Enter VK Group Access Token") if not config["VK"]["GROUP_TOKEN"] else config["VK"]["GROUP_TOKEN"]
+VK_GROUP_ID = input("Enter VK Group ID") if not config["VK"]["GROUP_ID"] else config["VK"]["GROUP_ID"]
 VK_USER_TOKEN = config["VK"]["USER_TOKEN"]
-VK_APP_ID = config["VK"]["APP_ID"]
 
 KB_MAIN = "func/keyboards/keyboard_main.json"
 KB_CHOOSE = "func/keyboards/keyboard_choose.json"
@@ -46,9 +46,6 @@ def get_auth_link(app_id, scope, version):
 
 
 class VKClient(vk_api.VkApi):
-    def set_token(self, token):
-        self.token = token
-
     def write_msg(self, user_id, message, fields=None):
         values = {'user_id': user_id, 'message': message, 'random_id': randrange(10 ** 7)}
         if fields:
@@ -171,15 +168,22 @@ class VKhandler:
         if self.position < len(self.search_results):
             search_entry = self.search_results[self.position]
 
-            photos = self.user_client.get_top_photos(search_entry.get("id", 1))
-            if event.type == VkBotEventType.MESSAGE_EVENT:
-                self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
-            self.client.write_msg(event.object.user_id, f"{search_entry.get('first_name', '')} "
-                                                        f"{search_entry.get('last_name', '')}" + f"\nhttps://vk.com/id{search_entry.get('id', 0)}",
-                                  {"attachment": f"photo{photos[0].get('owner_id', 0)}_{photos[0].get('media_id', 0)},"
-                                                 f"photo{photos[1].get('owner_id', 0)}_{photos[1].get('media_id', 0)},"
-                                                 f"photo{photos[2].get('owner_id', 0)}_{photos[2].get('media_id', 0)}",
-                                   "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
+            try:
+                photos = self.user_client.get_top_photos(search_entry.get("id", 1))
+            except vk_api.exceptions.ApiError as e:
+                logging.error(f'[USER_ID {event.object.user_id}] Unable to get photos from [USER-ID {search_entry.get("id", 1)}]. {e}')
+                self.handle_next(event)
+            else:
+                logging.info(f'[USER_ID {event.object.user_id}] Got photos from [USER-ID {search_entry.get("id", 1)}]')
+                if event.type == VkBotEventType.MESSAGE_EVENT:
+                    self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
+
+                attachment = ",".join([f"photo{photo.get('owner_id', 0)}_{photo.get('media_id', 0)}" for photo in photos])
+                self.client.write_msg(event.object.user_id, f"{search_entry.get('first_name', '')} "
+                                                            f"{search_entry.get('last_name', '')}" + f"\nhttps://vk.com/id{search_entry.get('id', 0)}",
+                                      {"attachment": attachment, "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
+
+
 
     def handle_next(self, event):
         self.position += 1
