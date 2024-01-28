@@ -12,9 +12,6 @@ if __name__ == "__main__":
                 case "main_menu":
                     logging.info(f"[USER_ID {event.object.user_id}] Handling 'main_menu'")
                     vk_handler.handle_main_menu(event)
-                case "authorize":
-                    logging.info(f"[USER_ID {event.object.user_id}] Handling 'authorize'")
-                    vk_handler.handle_authorize(event)
                 case "search":
                     logging.info(f"[USER_ID {event.object.user_id}] Handling 'search'")
                     vk_handler.handle_search(event)

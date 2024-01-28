@@ -2,6 +2,7 @@ import vk_api
 from random import randrange
 from datetime import date
 import yaml
+import json
 import datetime
 import logging
 from vk_api.bot_longpoll import VkBotEventType
@@ -11,7 +12,8 @@ with open("config.yaml") as c:
 
 VK_VERSION = config["VK"]["VERSION"]
 VK_APP_ID = input("Enter your standalone app ID") if not config["VK"]["APP_ID"] else config["VK"]["APP_ID"]
-VK_GROUP_TOKEN = input("Enter VK Group Access Token") if not config["VK"]["GROUP_TOKEN"] else config["VK"]["GROUP_TOKEN"]
+VK_GROUP_TOKEN = input("Enter VK Group Access Token") if not config["VK"]["GROUP_TOKEN"] else config["VK"][
+    "GROUP_TOKEN"]
 VK_GROUP_ID = input("Enter VK Group ID") if not config["VK"]["GROUP_ID"] else config["VK"]["GROUP_ID"]
 VK_USER_TOKEN = config["VK"]["USER_TOKEN"]
 
@@ -20,7 +22,7 @@ KB_CHOOSE = "func/keyboards/keyboard_choose.json"
 KB_SEARCH = "func/keyboards/keyboard_search.json"
 KB_EMPTY = "func/keyboards/keyboard_empty.json"
 KB_SETTINGS = "func/keyboards/keyboard_settings.json"
-
+KB_AUTHORIZE = "func/keyboards/keyboard_authorize.json"
 
 logging.basicConfig(level=logging.INFO, filename=f'logs/{datetime.datetime.now().date()}.txt',
                     filemode="a", format="%(asctime)s %(levelname)s %(message)s", encoding='UTF-8')
@@ -34,7 +36,7 @@ def calculate_age(born):
     return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
 
 
-def get_auth_link(app_id, scope, version):
+def write_auth_link_kb(app_id, scope, version):
     base_url = "https://oauth.vk.com/authorize"
     redirect_uri = "https://oauth.vk.com/blank.html"
     display = "page"
@@ -42,7 +44,20 @@ def get_auth_link(app_id, scope, version):
     auth_url = (f"{base_url}?client_id={app_id}&display={display}&"
                 f"redirect_uri={redirect_uri}&scope={scope}&"
                 f"response_type={response_type}&v={version}")
-    return auth_url
+
+    kb_auth = open(KB_AUTHORIZE, "r", encoding="utf-8")
+    kb_auth_json = json.load(kb_auth)
+    kb_auth_json["buttons"][0][0]["action"]["link"] = auth_url
+    kb_auth = open(KB_AUTHORIZE, "w", encoding="utf-8")
+    json.dump(kb_auth_json, kb_auth)
+    kb_auth.close()
+
+    kb_auth = open(KB_MAIN, "r", encoding="utf-8")
+    kb_auth_json = json.load(kb_auth)
+    kb_auth_json["buttons"][2][0]["action"]["link"] = auth_url
+    kb_auth = open(KB_MAIN, "w", encoding="utf-8")
+    json.dump(kb_auth_json, kb_auth)
+    kb_auth.close()
 
 
 class VKClient(vk_api.VkApi):
@@ -70,11 +85,6 @@ class VKClient(vk_api.VkApi):
             "has_photo": 1
         }
         search_res = self.method("users.search", params)
-
-        items = search_res.get("items", [])
-        result = {item.get("id", 0): {"first_name": item.get("first_name", ""),
-                                      "last_name": item.get("last_name", ""),
-                                      "link": f"https://vk.com/id{item.get('id', 0)}"} for item in items}
         return search_res.get("items", [])
 
     def get_city_id(self, city_title):
@@ -104,13 +114,15 @@ class VKhandler:
         self.search_results = search_results
         self.position = position
 
+        write_auth_link_kb(VK_APP_ID, "photos", VK_VERSION)
+
     def handle_start(self, event):
         self.client.write_msg(event.obj.message['from_id'], f"Для начала работы с ботом необходимо отправить ему "
-                                                    f"токен авторизации. Получить токен можно по ссылке "
-                                                    f"ниже, выдав необходимые права боту. Значение токена "
-                                                    f"будет записано в адресе страницы успешной авторизации "
-                                                    f"в поле 'access_token'",
-                              {"attachment": get_auth_link(VK_APP_ID, "photos", VK_VERSION)})
+                                                            f"токен авторизации. Получить токен можно по кнопке "
+                                                            f"ниже, выдав необходимые права боту. Значение токена "
+                                                            f"будет записано в адресе страницы успешной авторизации "
+                                                            f"в поле 'access_token'",
+                              {"keyboard": open(KB_AUTHORIZE, 'r', encoding='UTF-8').read()})
 
     def handle_token(self, event):
         self.user_client = VKClient(token=event.obj.message['text'], app_id=VK_APP_ID)
@@ -119,24 +131,14 @@ class VKhandler:
                               {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     def handle_random(self, event):
-        self.client.write_msg(event.obj.peer_id, f"Если у вас пропала клавиатура, то напишите боту слово 'Начать'",
-                              {"attachment": get_auth_link(VK_APP_ID, "photos", VK_VERSION)})
+        self.client.write_msg(event.obj.message['from_id'], f"Если у вас пропала клавиатура, то напишите боту слово 'Начать'",
+                              {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
 
     def handle_main_menu(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
         self.client.write_msg(event.obj.peer_id, f"Главное меню",
                               {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
-
-    def handle_authorize(self, event):
-        if event.type == VkBotEventType.MESSAGE_EVENT:
-            self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
-        self.client.write_msg(event.obj.peer_id, f"Для начала работы с ботом необходимо отправить ему "
-                                                 f"токен авторизации. Получить токен можно по ссылке "
-                                                 f"ниже, выдав необходимые права боту. Значение токена "
-                                                 f"будет записано в адресе страницы успешной авторизации "
-                                                 f"в поле 'access_token'",
-                              {"attachment": get_auth_link(VK_APP_ID, "photos", VK_VERSION)})
 
     def handle_search(self, event):
         user_info = self.client.get_user_info(event.object.user_id, "bdate,sex,city")[0]
@@ -171,19 +173,20 @@ class VKhandler:
             try:
                 photos = self.user_client.get_top_photos(search_entry.get("id", 1))
             except vk_api.exceptions.ApiError as e:
-                logging.error(f'[USER_ID {event.object.user_id}] Unable to get photos from [USER-ID {search_entry.get("id", 1)}]. {e}')
+                logging.error(
+                    f'[USER_ID {event.object.user_id}] Unable to get photos from [USER-ID {search_entry.get("id", 1)}]. {e}')
                 self.handle_next(event)
             else:
                 logging.info(f'[USER_ID {event.object.user_id}] Got photos from [USER-ID {search_entry.get("id", 1)}]')
                 if event.type == VkBotEventType.MESSAGE_EVENT:
                     self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-                attachment = ",".join([f"photo{photo.get('owner_id', 0)}_{photo.get('media_id', 0)}" for photo in photos])
+                attachment = ",".join(
+                    [f"photo{photo.get('owner_id', 0)}_{photo.get('media_id', 0)}" for photo in photos])
                 self.client.write_msg(event.object.user_id, f"{search_entry.get('first_name', '')} "
                                                             f"{search_entry.get('last_name', '')}" + f"\nhttps://vk.com/id{search_entry.get('id', 0)}",
-                                      {"attachment": attachment, "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
-
-
+                                      {"attachment": attachment,
+                                       "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
 
     def handle_next(self, event):
         self.position += 1
