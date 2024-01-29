@@ -5,18 +5,20 @@
       {
         "action":{
           "type":"callback",
-          "payload":"{\"type\": \"add_to_fav\"}",
-          "label":"Лайк"
+          "payload":"{\"type\": \"list_fav_list\"}",
+          "label":"Вывести список целиком (имя + ссылка)"
         },
-        "color":"positive"
-      },
+        "color":"default"
+      }
+    ],
+    [
       {
         "action":{
           "type":"callback",
-          "payload":"{\"type\": \"next_person\"}",
-          "label":"Далее"
+          "payload":"{\"type\": \"list_fav_gallery\"}",
+          "label":"Вывести по 3 (имя + ссылка + фото)"
         },
-        "color":"primary"
+        "color":"default"
       }
     ],
     [
