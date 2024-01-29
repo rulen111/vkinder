@@ -53,6 +53,12 @@ def api_handler(old_func):
     return new_func
 
 
+@logger
+def update_config(config):
+    with open("config.yaml", "w") as c:
+        yaml.dump(config, c)
+
+
 def calculate_age(born):
     today = date.today()
     return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
@@ -186,6 +192,9 @@ class VKhandler:
     @logger
     def token(self, event):
         self.user_client = VKClient(token=event.obj.message['text'], app_id=VK_APP_ID)
+        config["VK"]["USER_TOKEN"] = event.obj.message['text']
+        update_config(config)
+
         # self.user_client.auth(reauth=False, token_only=True)
         self.client.write_msg(event.obj.message['from_id'], f"Вы успешно авторизованы",
                               {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
