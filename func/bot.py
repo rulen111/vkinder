@@ -1,12 +1,12 @@
-import vk_api
-from random import randrange
-from datetime import date
 import yaml
 import json
 import datetime
 import logging
-from vk_api.bot_longpoll import VkBotEventType
 import inspect
+import vk_api
+from vk_api.bot_longpoll import VkBotEventType
+from random import randrange
+from datetime import date
 
 with open("config.yaml") as c:
     config = yaml.full_load(c)
@@ -34,6 +34,11 @@ logging.info("-" * 80)
 
 
 def logger(old_func):
+    """
+    Decorator for logging a function call
+    :param old_func: func to wrap
+    :return: wrapped func
+    """
     def new_func(*args, **kwargs):
         logging.info(f"Handling event '{old_func.__name__}'")
         result = old_func(*args, **kwargs)
@@ -43,6 +48,11 @@ def logger(old_func):
 
 
 def api_handler(old_func):
+    """
+    Decorator for catching vkapi errors
+    :param old_func: func to wrap
+    :return: wrapped func
+    """
     def new_func(*args, **kwargs):
         try:
             result = old_func(*args, **kwargs)
@@ -55,18 +65,36 @@ def api_handler(old_func):
 
 
 @logger
-def update_config(config):
-    with open("config.yaml", "w") as c:
-        yaml.dump(config, c)
+def update_config(data):
+    """
+    Write updated config data to config.yaml
+    :param data: data to write
+    :return: None
+    """
+    with open("config.yaml", "w") as f:
+        yaml.dump(data, f)
 
 
 def calculate_age(born):
+    """
+    Calculate age from birthday date
+    :param born: birthday date obj
+    :return: int age
+    """
     today = date.today()
     return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
 
 
 @logger
 def write_auth_link_kb(app_id, scope, version):
+    """
+    Generate VK OAuth link and write it to
+    keyboard json files
+    :param app_id: VK standalone app id
+    :param scope: access scope
+    :param version: api version
+    :return: None
+    """
     base_url = "https://oauth.vk.com/authorize"
     redirect_uri = "https://oauth.vk.com/blank.html"
     display = "page"
@@ -93,8 +121,19 @@ def write_auth_link_kb(app_id, scope, version):
 
 
 class VKClient(vk_api.VkApi):
+    """
+    Based on vk_api.VkApi class.
+    Encapsulates several api functions
+    """
     @api_handler
     def write_msg(self, user_id, message, fields=None):
+        """
+        Write message to user with given values. Supports attachments
+        :param user_id: id of user to write to
+        :param message: message to write
+        :param fields: custom parameters
+        :return: None
+        """
         values = {'user_id': user_id, 'message': message, 'random_id': randrange(10 ** 7)}
         logging.info(f"Messaging to id{user_id}")
         if fields:
@@ -104,17 +143,38 @@ class VKClient(vk_api.VkApi):
 
     @api_handler
     def event_answer(self, event_id, user_id, peer_id):
+        """
+        Send answer to a MessageEvent.
+        Used to show a successful method execution
+        :param event_id: id of the caller event
+        :param user_id: id of the caller user
+        :param peer_id: id of the chat object
+        :return: None
+        """
         self.method("messages.sendMessageEventAnswer", {"event_id": event_id, "user_id": user_id,
                                                         "peer_id": peer_id})
 
     @api_handler
     def get_user_info(self, user_id, fields):
+        """
+        Invoke "users.get" api method.
+        :param user_id: id of the user in question
+        :param fields: custom fields to return
+        :return: User object
+        """
         logging.info(f"Getting user information for id{user_id}")
         user_info = self.method("users.get", {"user_ids": user_id, "fields": fields})
         return user_info
 
     @api_handler
     def search_users(self, fields, count=100, offset=0):
+        """
+        Invoke "users.search" with specified search parameters.
+        :param fields: fields to search with
+        :param count: number of entries to get
+        :param offset: first entry offset
+        :return: list of User objects
+        """
         params = {
             "sort": 0,
             "offset": 0,
@@ -128,11 +188,23 @@ class VKClient(vk_api.VkApi):
 
     @api_handler
     def get_city_id(self, city_title):
+        """
+        Invoke "database.getCities" api method.
+        :param city_title: search query
+        :return: city object
+        """
         city = self.method("database.getCities", {"q": city_title, "need_all": 0})
         return city.get("items", [])[0]
 
     @api_handler
     def get_top_photos(self, owner_id, count=3):
+        """
+        Invoke "photos.get" api method.
+        Get top liked profile photos of a user
+        :param owner_id: id of the user in question
+        :param count: number of photos to get
+        :return: list of photo dcit objects
+        """
         logging.info(f"Getting top {count} profile photos of id{owner_id}")
         album = self.method("photos.get", {"owner_id": owner_id, "album_id": "profile", "extended": 1})
         photos = []
