@@ -6,6 +6,7 @@ import json
 import datetime
 import logging
 from vk_api.bot_longpoll import VkBotEventType
+import inspect
 
 with open("config.yaml") as c:
     config = yaml.full_load(c)
@@ -47,8 +48,8 @@ def api_handler(old_func):
             result = old_func(*args, **kwargs)
             return result
         except vk_api.exceptions.ApiError as e:
-            logging.exception(e.error)
-            return None
+            logging.exception(e)
+            return e
 
     return new_func
 
@@ -155,30 +156,14 @@ class VKhandler:
         self.search_fields = search_fields
         self.search_results = search_results
         self.position = position
-
-        self.handler_schema = {
-            "start": self.start,
-            "token": self.token,
-            "random_msg": self.random_msg,
-            "main_menu": self.main_menu,
-            "search": self.search,
-            "search_start": self.search_start,
-            "rotation": self.rotation,
-            "next_person": self.next_person,
-            "show_help": self.show_help,
-            "settings": self.settings,
-            "change_city": self.change_city,
-            "change_age": self.change_age,
-            "change_sex": self.change_sex,
-            "add_to_fav": self.add_to_fav,
-            "list_fav": self.list_fav,
-            "list_fav_list": self.list_fav_list,
-            "list_fav_gallery": self.list_fav_gallery,
-            "fav_gallery_next": self.fav_gallery_next
-        }
+        self.handler_schema = dict(inspect.getmembers(self, predicate=inspect.ismethod))
 
         logging.warning(f"VKhandler initialized")
         write_auth_link_kb(VK_APP_ID, "photos", VK_VERSION)
+
+    @api_handler
+    def init_user_client(self, token):
+        self.user_client = VKClient(token=token, app_id=VK_APP_ID)
 
     @logger
     def start(self, event):
@@ -191,13 +176,17 @@ class VKhandler:
 
     @logger
     def token(self, event):
-        self.user_client = VKClient(token=event.obj.message['text'], app_id=VK_APP_ID)
-        config["VK"]["USER_TOKEN"] = event.obj.message['text']
-        update_config(config)
+        token = event.obj.message['text']
+        request = self.init_user_client(token)
+        if type(request) != vk_api.exceptions.ApiError:
+            config["VK"]["USER_TOKEN"] = token
+            update_config(config)
 
-        # self.user_client.auth(reauth=False, token_only=True)
-        self.client.write_msg(event.obj.message['from_id'], f"Вы успешно авторизованы",
-                              {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
+            self.client.write_msg(event.obj.message['from_id'], f"Вы успешно авторизованы",
+                                  {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
+        else:
+            self.client.write_msg(event.obj.message['from_id'], f"Возникла ошибка {request.error}.\nПопробуйте еще раз",
+                                  {"keyboard": open(KB_AUTHORIZE, 'r', encoding='UTF-8').read()})
 
     @logger
     def random_msg(self, event):
@@ -209,36 +198,45 @@ class VKhandler:
     def main_menu(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
+
         self.client.write_msg(event.obj.peer_id, f"Главное меню",
                               {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
     def search(self, event):
         user_info = self.client.get_user_info(event.object.user_id, "bdate,sex,city")[0]
-        city = user_info.get("city", {})
-        sex = user_info.get("sex", 0)
-        born = datetime.datetime.strptime(user_info.get("bdate", ""), "%d.%m.%Y")
-        age = calculate_age(born)
-        search_fields = {
-            # "fields": "bdate,sex,city",
-            "city": city.get("id", 2),
-            "sex": 0 if sex == 1 else 1,
-            "age_from": age,
-            "age_to": age,
-        }
-        self.search_fields = search_fields
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
-        self.client.write_msg(event.object.user_id, f"Выполнить поиск по следующим данным?:\n- г. "
-                                                    f"{city.get('title', '')}\n- {age} лет\n- пол "
-                                                    f"{'мужской' if sex == 1 else 'женский'}",
-                              {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
+        if type(user_info) != vk_api.exceptions.ApiError:
+            city = user_info.get("city", {})
+            sex = user_info.get("sex", 0)
+            born = datetime.datetime.strptime(user_info.get("bdate", ""), "%d.%m.%Y")
+            age = calculate_age(born)
+            search_fields = {
+                "city": city.get("id", 2),
+                "sex": 0 if sex == 1 else 1,
+                "age_from": age,
+                "age_to": age,
+            }
+            self.search_fields = search_fields
+
+            self.client.write_msg(event.object.user_id, f"Выполнить поиск по следующим данным?:\n- г. "
+                                                        f"{city.get('title', '')}\n- {age} лет\n- пол "
+                                                        f"{'мужской' if sex == 1 else 'женский'}",
+                                  {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
+        else:
+            self.client.write_msg(event.obj.peer_id, f"Возникла ошибка {user_info.error}.\nПопробуйте еще раз",
+                                  {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
     def search_start(self, event):
         search_results = self.user_client.search_users(self.search_fields)
-        self.search_results = search_results
-        self.rotation(event)
+        if type(search_results) != vk_api.exceptions.ApiError:
+            self.search_results = search_results
+            self.rotation(event)
+        else:
+            self.client.write_msg(event.obj.peer_id, f"Возникла ошибка {search_results.error}.\nПопробуйте еще раз",
+                                  {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
     def rotation(self, event):
@@ -246,7 +244,7 @@ class VKhandler:
             search_entry = self.search_results[self.position]
 
             photos = self.user_client.get_top_photos(search_entry.get("id", 1))
-            if photos:
+            if type(photos) != vk_api.exceptions.ApiError:
                 logging.info(f'[USER_ID {event.object.user_id}] Got photos from [USER-ID {search_entry.get("id", 1)}]')
 
                 if event.type == VkBotEventType.MESSAGE_EVENT:
@@ -262,6 +260,10 @@ class VKhandler:
                                        "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
             else:
                 self.next_person(event)
+        else:
+            self.client.write_msg(event.obj.peer_id, f"Вы достигли конца списка. Выполните поиск еще раз, чтобы "
+                                                     f"обновить выдачу",
+                                  {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
     def next_person(self, event):
@@ -278,6 +280,7 @@ class VKhandler:
     def settings(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
+
         self.client.write_msg(event.object.user_id, f"Какой параметр вы хотите изменить?",
                               {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
 
@@ -286,35 +289,47 @@ class VKhandler:
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        pass
+        self.client.write_msg(event.object.user_id, "Введите название города в следующем формате:\n"
+                                                    "город {Название городда без фиг. скобок}",
+                              {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
 
     @logger
     def change_age(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        pass
+        self.client.write_msg(event.object.user_id, "Введите возраст в следующем формате:\n"
+                                                    "возраст {Возраст от}-{Возраст до}",
+                              {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
 
     @logger
     def change_sex(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        pass
+        self.client.write_msg(event.object.user_id, "Введите пол в следующем формате:\n"
+                                                    "пол {мужской/женский}",
+                              {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
 
     @logger
     def add_to_fav(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        pass
+        # add_to_db()
+
+        self.client.write_msg(event.object.user_id, f"Пользователь добавлен в избранное",
+                              {"keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
 
     @logger
     def list_fav(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        pass
+        # fav = get_from_db()
+
+        self.client.write_msg(event.object.user_id, f"В каком виде вывести избранное?",
+                              {"keyboard": open(KB_LIST_FAV, 'r', encoding='UTF-8').read()})
 
     @logger
     def list_fav_list(self, event):
