@@ -1,0 +1,23 @@
+{
+  "one_time":false,
+  "buttons":[
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"list_fav\"}",
+          "label":"Назад"
+        },
+        "color":"negative"
+      },
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"fav_gallery_next\"}",
+          "label":"Далее"
+        },
+        "color":"primary"
+      }
+    ]
+  ]
+}

@@ -1,9 +1,12 @@
+import vk_api
 import yaml
+import logging
+
 import json
 import datetime
-import logging
 import inspect
-import vk_api
+import time
+
 from vk_api.bot_longpoll import VkBotEventType
 from random import randrange
 from datetime import date
@@ -25,6 +28,7 @@ KB_EMPTY = "func/keyboards/keyboard_empty.json"
 KB_SETTINGS = "func/keyboards/keyboard_settings.json"
 KB_AUTHORIZE = "func/keyboards/keyboard_authorize.json"
 KB_LIST_FAV = "func/keyboards/keyboard_list_fav.json"
+KB_LIST_FAV_GALLERY = "func/keyboards/keyboard_list_fav_gallery.json"
 
 logging.basicConfig(level=logging.INFO, filename=f'logs/{datetime.datetime.now().date()}.log',
                     filemode="a", format="%(asctime)s %(levelname)s %(message)s", encoding='UTF-8')
@@ -77,7 +81,7 @@ def update_config(data):
 
 def calculate_age(born):
     """
-    Calculate age from birthday date
+    Calculate age from birthday date.
     :param born: birthday date obj
     :return: int age
     """
@@ -200,7 +204,7 @@ class VKClient(vk_api.VkApi):
     def get_top_photos(self, owner_id, count=3):
         """
         Invoke "photos.get" api method.
-        Get top liked profile photos of a user
+        Get top liked profile photos of a user.
         :param owner_id: id of the user in question
         :param count: number of photos to get
         :return: list of photo dcit objects
@@ -220,10 +224,22 @@ class VKClient(vk_api.VkApi):
 
 
 class VKhandler:
-
+    """
+    Class for longpoll handling. Processes incoming bot events.
+    """
     def __init__(self, group_client: VKClient, user_client: VKClient = None,
                  search_fields: dict = None, search_results: dict = None, fav_list: list = None,
                  position=0):
+        """
+        Must pass a working VKClient object.
+        Can be initialized with specified search parameters.
+        :param group_client: required. VKClient object for use with group token
+        :param user_client: VKClient object for use with user token
+        :param search_fields: Parameters for search function
+        :param search_results: Search results
+        :param fav_list: Favourite list
+        :param position: Search result index
+        """
         self.client = group_client
         self.user_client = VKClient(token=VK_USER_TOKEN, app_id=VK_APP_ID) if VK_USER_TOKEN else user_client
         self.search_fields = search_fields
@@ -231,16 +247,27 @@ class VKhandler:
         self.fav_list = fav_list
         self.position = position
         self.handler_schema = dict(inspect.getmembers(self, predicate=inspect.ismethod))
+        self.current_entry = None
 
         logging.warning(f"VKhandler initialized")
         write_auth_link_kb(VK_APP_ID, "photos", VK_VERSION)
 
     @api_handler
     def init_user_client(self, token):
+        """
+        Handle initialization of VKClient object for use with user token.
+        :param token: access_token
+        :return: None
+        """
         self.user_client = VKClient(token=token, app_id=VK_APP_ID)
 
     @logger
     def start(self, event):
+        """
+        Handle "start" event.
+        :param event: event object
+        :return: None
+        """
         self.client.write_msg(event.obj.message['from_id'], f"Для начала работы с ботом необходимо отправить ему "
                                                             f"токен авторизации. Получить токен можно по кнопке "
                                                             f"ниже, выдав необходимые права боту. Значение токена "
@@ -250,6 +277,11 @@ class VKhandler:
 
     @logger
     def token(self, event):
+        """
+        Handle "token" event.
+        :param event: event object
+        :return: None
+        """
         token = event.obj.message['text']
         request = self.init_user_client(token)
         if type(request) != vk_api.exceptions.ApiError:
@@ -264,12 +296,22 @@ class VKhandler:
 
     @logger
     def random_msg(self, event):
+        """
+        Handle "random_msg" event.
+        :param event: event object
+        :return: None
+        """
         self.client.write_msg(event.obj.message['from_id'],
                               f"Если у вас пропала клавиатура, то напишите боту слово 'Начать'",
                               {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
 
     @logger
     def main_menu(self, event):
+        """
+        Handle "main_menu" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -278,6 +320,11 @@ class VKhandler:
 
     @logger
     def search(self, event):
+        """
+        Handle "search" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -314,6 +361,11 @@ class VKhandler:
 
     @logger
     def search_start(self, event):
+        """
+        Handle "search_start" event.
+        :param event: event object
+        :return: None
+        """
         search_fields = self.search_fields
         search_fields["city"] = search_fields["city"].get("id", 2)
         search_results = self.user_client.search_users(search_fields)
@@ -327,6 +379,14 @@ class VKhandler:
 
     @logger
     def rotation(self, event):
+        """
+        Handle "rotation" event.
+        :param event: event object
+        :return: None
+        """
+        if event.type == VkBotEventType.MESSAGE_EVENT:
+            self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
+
         if self.position < len(self.search_results):
             search_entry = self.search_results[self.position]
 
@@ -334,16 +394,20 @@ class VKhandler:
             if type(photos) != vk_api.exceptions.ApiError:
                 logging.info(f'[USER_ID {event.object.user_id}] Got photos from [USER-ID {search_entry.get("id", 1)}]')
 
-                if event.type == VkBotEventType.MESSAGE_EVENT:
-                    self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
-
                 attachment = ",".join(
                     [f"photo{photo.get('owner_id', 0)}_{photo.get('media_id', 0)}" for photo in photos])
 
-                self.client.write_msg(event.object.user_id, f"{search_entry.get('first_name', '')} "
-                                                            f"{search_entry.get('last_name', '')}" +
-                                                            f"\nhttps://vk.com/id{search_entry.get('id', 0)}",
-                                      {"attachment": attachment,
+                self.current_entry = {
+                    "first_name": search_entry.get('first_name', ''),
+                    "last_name": search_entry.get('last_name', ''),
+                    "link": f"\nhttps://vk.com/id{search_entry.get('id', 0)}",
+                    "attachment": attachment
+                }
+
+                self.client.write_msg(event.object.user_id, f"{self.current_entry.get('first_name', '')} "
+                                                            f"{self.current_entry.get('last_name', '')}" +
+                                                            f"\nhttps://vk.com/id{self.current_entry.get('id', 0)}",
+                                      {"attachment": self.current_entry.get("attachment", ""),
                                        "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
             else:
                 self.next_person(event)
@@ -354,17 +418,32 @@ class VKhandler:
 
     @logger
     def next_person(self, event):
+        """
+        Handle "next_person" event.
+        :param event: event object
+        :return: None
+        """
         self.position += 1
         self.rotation(event)
 
     @logger
     def show_help(self, event):
+        """
+        Handle "show_help" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
         pass
 
     @logger
     def settings(self, event):
+        """
+        Handle "settings" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -373,6 +452,11 @@ class VKhandler:
 
     @logger
     def change_city(self, event):
+        """
+        Handle "change_city" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -382,6 +466,11 @@ class VKhandler:
 
     @logger
     def change_city_value(self, event):
+        """
+        Handle "change_city_value" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -393,6 +482,11 @@ class VKhandler:
 
     @logger
     def change_age(self, event):
+        """
+        Handle "change_age" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -402,6 +496,11 @@ class VKhandler:
 
     @logger
     def change_age_value(self, event):
+        """
+        Handle "change_age_value" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -414,6 +513,11 @@ class VKhandler:
 
     @logger
     def change_sex(self, event):
+        """
+        Handle "change_sex" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -423,6 +527,11 @@ class VKhandler:
 
     @logger
     def change_sex_value(self, event):
+        """
+        Handle "change_sex_value" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -434,16 +543,27 @@ class VKhandler:
 
     @logger
     def add_to_fav(self, event):
+        """
+        Handle "add_to_fav" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        # add_to_db()
+        # write_to_db(self.current_entry)
 
-        self.client.write_msg(event.object.user_id, f"Пользователь добавлен в избранное",
+        self.client.write_msg(event.object.user_id, f"Пользователь {self.current_entry.get('first_name', '')} "
+                                                    f"{self.current_entry.get('last_name', '')} добавлен в избранное",
                               {"keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
 
     @logger
     def list_fav(self, event):
+        """
+        Handle "list_fav" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -454,13 +574,32 @@ class VKhandler:
 
     @logger
     def list_fav_list(self, event):
+        """
+        Handle "list_fav_list" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        pass
+        for idx, entry in enumerate(self.fav_list):
+            if (idx + 1) % 5 == 0:
+                time.sleep(1)
+
+            self.client.write_msg(event.object.user_id, f"- {self.current_entry.get('first_name', '')} "
+                                                        f"{self.current_entry.get('last_name', '')} "
+                                                        f"{self.current_entry.get('link', '')}")
+
+        self.client.write_msg(event.object.user_id, f"Конец списка",
+                              {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
     def list_fav_gallery(self, event):
+        """
+        Handle "list_fav_gallery" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -468,6 +607,11 @@ class VKhandler:
 
     @logger
     def fav_gallery_next(self, event):
+        """
+        Handle "fav_gallery_next" event.
+        :param event: event object
+        :return: None
+        """
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
@@ -475,6 +619,12 @@ class VKhandler:
 
     @logger
     def start_polling(self, longpoll):
+        """
+        Start receiving and handling events from VK servers.
+        Iterates over every incoming event and calls an appropriate handler.
+        :param longpoll: longpoll object
+        :return: None
+        """
         for event in longpoll.listen():
             if event.type == VkBotEventType.MESSAGE_EVENT:
                 payload = event.object.payload.get("type", "")
