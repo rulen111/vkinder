@@ -150,11 +150,13 @@ class VKClient(vk_api.VkApi):
 class VKhandler:
 
     def __init__(self, group_client: VKClient, user_client: VKClient = None,
-                 search_fields: dict = {}, search_results: dict = {}, position=0):
+                 search_fields: dict = None, search_results: dict = None, fav_list: list = None,
+                 position=0):
         self.client = group_client
         self.user_client = VKClient(token=VK_USER_TOKEN, app_id=VK_APP_ID) if VK_USER_TOKEN else user_client
         self.search_fields = search_fields
         self.search_results = search_results
+        self.fav_list = fav_list
         self.position = position
         self.handler_schema = dict(inspect.getmembers(self, predicate=inspect.ismethod))
 
@@ -204,33 +206,46 @@ class VKhandler:
 
     @logger
     def search(self, event):
-        user_info = self.client.get_user_info(event.object.user_id, "bdate,sex,city")[0]
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
-        if type(user_info) != vk_api.exceptions.ApiError:
-            city = user_info.get("city", {})
-            sex = user_info.get("sex", 0)
-            born = datetime.datetime.strptime(user_info.get("bdate", ""), "%d.%m.%Y")
-            age = calculate_age(born)
-            search_fields = {
-                "city": city.get("id", 2),
-                "sex": 0 if sex == 1 else 1,
-                "age_from": age,
-                "age_to": age,
-            }
-            self.search_fields = search_fields
 
+        if self.search_fields:
             self.client.write_msg(event.object.user_id, f"Выполнить поиск по следующим данным?:\n- г. "
-                                                        f"{city.get('title', '')}\n- {age} лет\n- пол "
-                                                        f"{'мужской' if sex == 1 else 'женский'}",
+                                                        f"{self.search_fields.get('city', {}).get('title', '')}\n- от "
+                                                        f"{self.search_fields.get('age_from', 0)} до "
+                                                        f"{self.search_fields.get('age_to', 0)} лет\n- "
+                                                        f"пол {'мужской' if self.search_fields.get('sex', 0) == 1 else 'женский'}",
                                   {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
+
         else:
-            self.client.write_msg(event.obj.peer_id, f"Возникла ошибка {user_info.error}.\nПопробуйте еще раз",
-                                  {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
+            user_info = self.client.get_user_info(event.object.user_id, "bdate,sex,city")[0]
+            if type(user_info) != vk_api.exceptions.ApiError:
+                city = user_info.get("city", {})
+                sex = user_info.get("sex", 0)
+                born = datetime.datetime.strptime(user_info.get("bdate", ""), "%d.%m.%Y")
+                age = calculate_age(born)
+                search_fields = {
+                    "city": city,
+                    "sex": 0 if sex == 1 else 1,
+                    "age_from": age,
+                    "age_to": age,
+                }
+                self.search_fields = search_fields
+
+                self.client.write_msg(event.object.user_id, f"Выполнить поиск по следующим данным?:\n- г. "
+                                                            f"{city.get('title', '')}\n- {age} лет\n- пол "
+                                                            f"{'мужской' if sex == 1 else 'женский'}",
+                                      {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
+            else:
+                self.client.write_msg(event.obj.peer_id, f"Возникла ошибка {user_info.error}.\nПопробуйте еще раз",
+                                      {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
     def search_start(self, event):
-        search_results = self.user_client.search_users(self.search_fields)
+        search_fields = self.search_fields
+        search_fields["city"] = search_fields["city"].get("id", 2)
+        search_results = self.user_client.search_users(search_fields)
+
         if type(search_results) != vk_api.exceptions.ApiError:
             self.search_results = search_results
             self.rotation(event)
@@ -294,6 +309,17 @@ class VKhandler:
                               {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
 
     @logger
+    def change_city_value(self, event):
+        if event.type == VkBotEventType.MESSAGE_EVENT:
+            self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
+
+        city = self.user_client.get_city_id(event.obj.message['text'].split("город ")[1])
+        self.search_fields["city"] = city
+
+        self.client.write_msg(event.obj.message['from_id'], f"Город успешно изменен!\nКакой параметр вы хотите изменить?",
+                              {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
+
+    @logger
     def change_age(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
@@ -303,6 +329,18 @@ class VKhandler:
                               {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
 
     @logger
+    def change_age_value(self, event):
+        if event.type == VkBotEventType.MESSAGE_EVENT:
+            self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
+
+        age_from, age_to = event.obj.message['text'].split("возраст ")[1].split("-")
+        self.search_fields["age_from"] = age_from
+        self.search_fields["age_to"] = age_to
+
+        self.client.write_msg(event.obj.message['from_id'], f"Возраст успешно изменен!\nКакой параметр вы хотите изменить?",
+                              {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
+
+    @logger
     def change_sex(self, event):
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
@@ -310,6 +348,17 @@ class VKhandler:
         self.client.write_msg(event.object.user_id, "Введите пол в следующем формате:\n"
                                                     "пол {мужской/женский}",
                               {"keyboard": open(KB_EMPTY, 'r', encoding='UTF-8').read()})
+
+    @logger
+    def change_sex_value(self, event):
+        if event.type == VkBotEventType.MESSAGE_EVENT:
+            self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
+
+        sex = event.obj.message['text'].split("пол ")[1]
+        self.search_fields["sex"] = 1 if sex == "мужской" else 0
+
+        self.client.write_msg(event.obj.message['from_id'], f"Пол успешно изменен!\nКакой параметр вы хотите изменить?",
+                              {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
 
     @logger
     def add_to_fav(self, event):
@@ -326,7 +375,7 @@ class VKhandler:
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        # fav = get_from_db()
+        # self.fav_list = get_from_db()
 
         self.client.write_msg(event.object.user_id, f"В каком виде вывести избранное?",
                               {"keyboard": open(KB_LIST_FAV, 'r', encoding='UTF-8').read()})
@@ -366,5 +415,11 @@ class VKhandler:
                             self.handler_schema["token"](event)
                         case "Начать":
                             self.handler_schema["start"](event)
+                        case s if s.startswith("город "):
+                            self.handler_schema["change_city_value"](event)
+                        case s if s.startswith("возраст "):
+                            self.handler_schema["change_age_value"](event)
+                        case s if s.startswith("пол "):
+                            self.handler_schema["change_sex_value"](event)
                         case _:
                             self.handler_schema["random_msg"](event)
