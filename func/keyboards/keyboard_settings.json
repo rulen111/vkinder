@@ -1,0 +1,45 @@
+{
+  "one_time":false,
+  "buttons":[
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"change_city\"}",
+          "label":"Изменить город"
+        },
+        "color":"default"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"change_age\"}",
+          "label":"Изменить возраст"
+        },
+        "color":"default"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"change_sex\"}",
+          "label":"Изменить пол"
+        },
+        "color":"default"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"main_menu\"}",
+          "label":"Главное меню"
+        },
+        "color":"negative"
+      }
+    ]
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "one_time":false,
+  "buttons":[
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"add_to_fav\"}",
+          "label":"Лайк"
+        },
+        "color":"positive"
+      },
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"next_person\"}",
+          "label":"Далее"
+        },
+        "color":"primary"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"main_menu\"}",
+          "label":"Главное меню"
+        },
+        "color":"negative"
+      }
+    ]
+  ]
+}

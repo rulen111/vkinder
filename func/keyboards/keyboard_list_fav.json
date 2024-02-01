@@ -1,0 +1,35 @@
+{
+  "one_time":false,
+  "buttons":[
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"list_fav_list\"}",
+          "label":"Вывести список целиком (имя + ссылка)"
+        },
+        "color":"default"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"list_fav_gallery\"}",
+          "label":"Вывести по 3 (имя + ссылка + фото)"
+        },
+        "color":"default"
+      }
+    ],
+    [
+      {
+        "action":{
+          "type":"callback",
+          "payload":"{\"type\": \"main_menu\"}",
+          "label":"Главное меню"
+        },
+        "color":"negative"
+      }
+    ]
+  ]
+}
