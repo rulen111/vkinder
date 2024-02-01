@@ -1,20 +1,26 @@
-import sqlalchemy
-from sqlalchemy import text
+import yaml
+import sqlalchemy as sq
 from sqlalchemy.orm import sessionmaker
-import psycopg2
 
-from create_db import *
+import db.models as models
 
-DSN = "postgresql://postgres:postgres@localhost:5432/familiarity_bot"
-engine = sqlalchemy.create_engine(DSN)
-create_tables(engine)
-con = engine.connect()
+with open("config.yaml") as c:
+    config = yaml.full_load(c)
+
+# Make DSN string
+DSN = (f'{config["DB"]["PROTOCOL"]}://{config["DB"]["USER"]}:'
+       f'{config["DB"]["PASSWORD"]}@{config["DB"]["SERVER"]}:'
+       f'{config["DB"]["PORT"]}/{config["DB"]["NAME"]}')
+
+# Initialize Engine object
+engine = sq.create_engine(DSN)
+
+# Drop existing tables and create them again
+models.drop_tables(engine)
+models.create_tables(engine)
 
 Session = sessionmaker(bind=engine)
 session = Session()
 
-query = session.query(City.name).all()
-print(query)
-
 session.commit()
-session.close()
+# session.close()

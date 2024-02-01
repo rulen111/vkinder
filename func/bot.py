@@ -11,6 +11,9 @@ from vk_api.bot_longpoll import VkBotEventType
 from random import randrange
 from datetime import date
 
+import db.models as db
+from db.main import session
+
 with open("config.yaml") as c:
     config = yaml.full_load(c)
 
@@ -343,6 +346,10 @@ class VKhandler:
                 sex = user_info.get("sex", 0)
                 born = datetime.datetime.strptime(user_info.get("bdate", ""), "%d.%m.%Y")
                 age = calculate_age(born)
+
+                db.add_city_entry(session, city.get("id", 2), city.get("title", ""))
+                db.add_client_info(session, event.object.user_id, age, sex, city.get("id", 2))
+
                 search_fields = {
                     "city": city,
                     "sex": 0 if sex == 1 else 1,
@@ -406,7 +413,7 @@ class VKhandler:
 
                 self.client.write_msg(event.object.user_id, f"{self.current_entry.get('first_name', '')} "
                                                             f"{self.current_entry.get('last_name', '')}" +
-                                                            f"\nhttps://vk.com/id{self.current_entry.get('id', 0)}",
+                                                            f"\n{self.current_entry.get('link', '')}",
                                       {"attachment": self.current_entry.get("attachment", ""),
                                        "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
             else:
@@ -551,7 +558,8 @@ class VKhandler:
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        # write_to_db(self.current_entry)
+        entry = {k: v for k, v in self.current_entry.items() if k != "link"}
+        db.add_fav_entry(session, event.object.user_id, int(self.current_entry["link"].strip("\nhttps://vk.com/id")), **entry)
 
         self.client.write_msg(event.object.user_id, f"Пользователь {self.current_entry.get('first_name', '')} "
                                                     f"{self.current_entry.get('last_name', '')} добавлен в избранное",
@@ -567,7 +575,7 @@ class VKhandler:
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        # self.fav_list = get_from_db()
+        self.fav_list = db.get_fav_list(session, event.object.user_id)
 
         self.client.write_msg(event.object.user_id, f"В каком виде вывести избранное?",
                               {"keyboard": open(KB_LIST_FAV, 'r', encoding='UTF-8').read()})
