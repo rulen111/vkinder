@@ -13,15 +13,14 @@ from datetime import date
 
 import db.models as db
 from db import session
-# from db.main import session
 
 with open("config.yaml") as c:
     config = yaml.full_load(c)
 
 VK_VERSION = config["VK"]["VERSION"]
 VK_APP_ID = input("Enter your standalone app ID") if not config["VK"]["APP_ID"] else config["VK"]["APP_ID"]
-VK_GROUP_TOKEN = input("Enter VK Group Access Token") if not config["VK"]["GROUP_TOKEN"] else config["VK"][
-    "GROUP_TOKEN"]
+VK_GROUP_TOKEN = input("Enter VK Group Access Token") if not config["VK"]["GROUP_TOKEN"] \
+    else config["VK"]["GROUP_TOKEN"]
 VK_GROUP_ID = input("Enter VK Group ID") if not config["VK"]["GROUP_ID"] else config["VK"]["GROUP_ID"]
 VK_USER_TOKEN = config["VK"]["USER_TOKEN"]
 
@@ -47,6 +46,7 @@ def logger(old_func):
     :param old_func: func to wrap
     :return: wrapped func
     """
+
     def new_func(*args, **kwargs):
         logging.info(f"Handling event '{old_func.__name__}'")
         result = old_func(*args, **kwargs)
@@ -61,6 +61,7 @@ def api_handler(old_func):
     :param old_func: func to wrap
     :return: wrapped func
     """
+
     def new_func(*args, **kwargs):
         try:
             result = old_func(*args, **kwargs)
@@ -133,6 +134,7 @@ class VKClient(vk_api.VkApi):
     Based on vk_api.VkApi class.
     Encapsulates several api functions
     """
+
     @api_handler
     def write_msg(self, user_id, message, fields=None):
         """
@@ -231,6 +233,7 @@ class VKhandler:
     """
     Class for longpoll handling. Processes incoming bot events.
     """
+
     def __init__(self, group_client: VKClient, user_client: VKClient = None,
                  search_fields: dict = None, search_results: dict = None, fav_list: list = None,
                  position=0):
@@ -349,7 +352,11 @@ class VKhandler:
                 born = datetime.datetime.strptime(user_info.get("bdate", ""), "%d.%m.%Y")
                 age = calculate_age(born)
 
-                db.add_city_entry(session, city.get("id", 2), city.get("title", ""))
+                try:
+                    db.add_city_entry(session, city.get("id", 2), city.get("title", ""))
+                except BaseException as err:
+                    logging.warning(err.args)
+
                 db.add_client_info(session, event.object.user_id, age, sex, city.get("id", 2))
 
                 search_fields = {
@@ -415,7 +422,7 @@ class VKhandler:
 
                 self.client.write_msg(event.object.user_id, f"{self.current_entry.get('first_name', '')} "
                                                             f"{self.current_entry.get('last_name', '')}" +
-                                                            f"\n{self.current_entry.get('link', '')}",
+                                      f"\n{self.current_entry.get('link', '')}",
                                       {"attachment": self.current_entry.get("attachment", ""),
                                        "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
             else:
@@ -563,12 +570,20 @@ class VKhandler:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
         entry = {k: v for k, v in self.current_entry.items() if k != "link"}
-        db.add_fav_entry(session, event.object.user_id,
-                         int(self.current_entry["link"].strip("\nhttps://vk.com/id")), **entry)
+        try:
+            db.add_fav_entry(session, event.object.user_id,
+                             int(self.current_entry["link"].strip("\nhttps://vk.com/id")), **entry)
 
-        self.client.write_msg(event.object.user_id, f"Пользователь {self.current_entry.get('first_name', '')} "
-                                                    f"{self.current_entry.get('last_name', '')} добавлен в избранное",
-                              {"keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
+            self.client.write_msg(event.object.user_id,
+                                  f"Пользователь {self.current_entry.get('first_name', '')} "
+                                  f"{self.current_entry.get('last_name', '')} добавлен в избранное",
+                                  {"keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
+        except BaseException as err:
+            logging.error(err.args)
+            self.client.write_msg(event.object.user_id,
+                                  f"Пользователь {self.current_entry.get('first_name', '')} "
+                                  f"{self.current_entry.get('last_name', '')} уже в избранном",
+                                  {"keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
 
     @logger
     def list_fav(self, event):
@@ -580,10 +595,14 @@ class VKhandler:
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        self.fav_list = db.get_fav_list(session, event.object.user_id)
-
-        self.client.write_msg(event.object.user_id, f"В каком виде вывести избранное?",
-                              {"keyboard": open(KB_LIST_FAV, 'r', encoding='UTF-8').read()})
+        try:
+            self.fav_list = db.get_fav_list(session, event.object.user_id)
+            self.client.write_msg(event.object.user_id, f"В каком виде вывести избранное?",
+                                  {"keyboard": open(KB_LIST_FAV, 'r', encoding='UTF-8').read()})
+        except BaseException as err:
+            logging.error(err.args)
+            self.client.write_msg(event.object.user_id, f"Вы никого не добавляли в избранное.",
+                                  {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
     def list_fav_list(self, event):
@@ -599,9 +618,9 @@ class VKhandler:
             if (idx + 1) % 5 == 0:
                 time.sleep(1)
 
-            self.client.write_msg(event.object.user_id, f"- {self.current_entry.get('first_name', '')} "
-                                                        f"{self.current_entry.get('last_name', '')} "
-                                                        f"{self.current_entry.get('link', '')}")
+            self.client.write_msg(event.object.user_id, f"- {entry.get('first_name', '')} "
+                                                        f"{entry.get('last_name', '')} "
+                                                        f"{entry.get('link', '')}")
 
         self.client.write_msg(event.object.user_id, f"Конец списка",
                               {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})

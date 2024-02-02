@@ -111,13 +111,13 @@ def get_fav_list(session, client_id):
 
 
 def add_client_info(session, user_id, age, sex, city_id):
-    q = session.query(Client).filter(Client.user_id == user_id)
-    if q.all():
-        raise f"(Client) Entry client[{user_id}] already exists in target DB."
-    else:
-        client = Client(user_id=user_id, age=age, sex=sex, city_id=city_id)
-        session.add(client)
-        session.commit()
+    # q = session.query(Client).filter(Client.user_id == user_id)
+    # if q.all():
+    #     raise f"(Client) Entry client[{user_id}] already exists in target DB."
+    # else:
+    client = Client(user_id=user_id, age=age, sex=sex, city_id=city_id)
+    session.merge(client)
+    session.commit()
 
 
 def get_client_info(session, user_id):
