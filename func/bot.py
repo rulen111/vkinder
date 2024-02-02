@@ -12,7 +12,8 @@ from random import randrange
 from datetime import date
 
 import db.models as db
-from db.main import session
+from db import session
+# from db.main import session
 
 with open("config.yaml") as c:
     config = yaml.full_load(c)
@@ -332,11 +333,12 @@ class VKhandler:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
         if self.search_fields:
-            self.client.write_msg(event.object.user_id, f"Выполнить поиск по следующим данным?:\n- г. "
-                                                        f"{self.search_fields.get('city', {}).get('title', '')}\n- от "
-                                                        f"{self.search_fields.get('age_from', 0)} до "
-                                                        f"{self.search_fields.get('age_to', 0)} лет\n- "
-                                                        f"пол {'мужской' if self.search_fields.get('sex', 0) == 1 else 'женский'}",
+            self.client.write_msg(event.object.user_id,
+                                  f"Выполнить поиск по следующим данным?:\n- г. "
+                                  f"{self.search_fields.get('city', {}).get('title', '')}\n- от "
+                                  f"{self.search_fields.get('age_from', 0)} до "
+                                  f"{self.search_fields.get('age_to', 0)} лет\n- "
+                                  f"пол {'мужской' if self.search_fields.get('sex', 0) == 1 else 'женский'}",
                                   {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
 
         else:
@@ -484,7 +486,8 @@ class VKhandler:
         city = self.user_client.get_city_id(event.obj.message['text'].split("город ")[1])
         self.search_fields["city"] = city
 
-        self.client.write_msg(event.obj.message['from_id'], f"Город успешно изменен!\nКакой параметр вы хотите изменить?",
+        self.client.write_msg(event.obj.message['from_id'], f"Город успешно изменен!\n"
+                                                            f"Какой параметр вы хотите изменить?",
                               {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
 
     @logger
@@ -515,7 +518,8 @@ class VKhandler:
         self.search_fields["age_from"] = age_from
         self.search_fields["age_to"] = age_to
 
-        self.client.write_msg(event.obj.message['from_id'], f"Возраст успешно изменен!\nКакой параметр вы хотите изменить?",
+        self.client.write_msg(event.obj.message['from_id'], f"Возраст успешно изменен!\n"
+                                                            f"Какой параметр вы хотите изменить?",
                               {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
 
     @logger
@@ -559,7 +563,8 @@ class VKhandler:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
         entry = {k: v for k, v in self.current_entry.items() if k != "link"}
-        db.add_fav_entry(session, event.object.user_id, int(self.current_entry["link"].strip("\nhttps://vk.com/id")), **entry)
+        db.add_fav_entry(session, event.object.user_id,
+                         int(self.current_entry["link"].strip("\nhttps://vk.com/id")), **entry)
 
         self.client.write_msg(event.object.user_id, f"Пользователь {self.current_entry.get('first_name', '')} "
                                                     f"{self.current_entry.get('last_name', '')} добавлен в избранное",
