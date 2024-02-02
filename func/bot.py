@@ -46,7 +46,6 @@ def logger(old_func):
     :param old_func: func to wrap
     :return: wrapped func
     """
-
     def new_func(*args, **kwargs):
         logging.info(f"Handling event '{old_func.__name__}'")
         result = old_func(*args, **kwargs)
@@ -61,13 +60,12 @@ def api_handler(old_func):
     :param old_func: func to wrap
     :return: wrapped func
     """
-
     def new_func(*args, **kwargs):
         try:
             result = old_func(*args, **kwargs)
             return result
         except vk_api.exceptions.ApiError as e:
-            logging.exception(e)
+            logging.error(e)
             return e
 
     return new_func
@@ -233,10 +231,9 @@ class VKhandler:
     """
     Class for longpoll handling. Processes incoming bot events.
     """
-
     def __init__(self, group_client: VKClient, user_client: VKClient = None,
                  search_fields: dict = None, search_results: dict = None, fav_list: list = None,
-                 position=0):
+                 position: int = 0, current_entry: dict = None):
         """
         Must pass a working VKClient object.
         Can be initialized with specified search parameters.
@@ -253,10 +250,10 @@ class VKhandler:
         self.search_results = search_results
         self.fav_list = fav_list
         self.position = position
+        self.current_entry = current_entry
         self.handler_schema = dict(inspect.getmembers(self, predicate=inspect.ismethod))
-        self.current_entry = None
 
-        logging.warning(f"VKhandler initialized")
+        logging.info(f"VKhandler initialized")
         write_auth_link_kb(VK_APP_ID, "photos", VK_VERSION)
 
     @api_handler
@@ -335,45 +332,57 @@ class VKhandler:
         if event.type == VkBotEventType.MESSAGE_EVENT:
             self.client.event_answer(event.object.event_id, event.object.user_id, event.object.peer_id)
 
-        if self.search_fields:
+        try:
+            self.search_fields = db.get_client_info(session, event.object.user_id)
             self.client.write_msg(event.object.user_id,
                                   f"Выполнить поиск по следующим данным?:\n- г. "
                                   f"{self.search_fields.get('city', {}).get('title', '')}\n- от "
                                   f"{self.search_fields.get('age_from', 0)} до "
                                   f"{self.search_fields.get('age_to', 0)} лет\n- "
-                                  f"пол {'мужской' if self.search_fields.get('sex', 0) == 1 else 'женский'}",
+                                  f"пол {'мужской' if self.search_fields.get('sex', 0) == 0 else 'женский'}",
                                   {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
+            return
+        except Exception as err:
+            logging.error(err)
+            self.search_fields = self.client.get_user_info(event.object.user_id, "bdate,sex,city")[0]
 
+        if type(self.search_fields) != vk_api.exceptions.ApiError:
+            city = self.search_fields.get("city", {})
+            sex = self.search_fields.get("sex", 0)
+
+            try:
+                born = datetime.datetime.strptime(self.search_fields.get("bdate", ""), "%d.%m.%Y")
+                age_from = calculate_age(born)
+                age_to = age_from
+            except Exception as err:
+                logging.error(err)
+                age_from = 21
+                age_to = age_from
+
+            try:
+                db.add_city_entry(session, city.get("id", 2), city.get("title", ""))
+            except Exception as err:
+                logging.error(err)
+
+            self.search_fields = {
+                "city": city,
+                "sex": 0 if sex == 1 else 1,
+                "age_from": age_from,
+                "age_to": age_to
+            }
+            db.add_client_info(session, event.object.user_id, **self.search_fields)
+
+            self.client.write_msg(event.object.user_id,
+                                  f"Выполнить поиск по следующим данным?:\n- г. "
+                                  f"{self.search_fields.get('city', {}).get('title', '')}\n- от "
+                                  f"{self.search_fields.get('age_from', 0)} до "
+                                  f"{self.search_fields.get('age_to', 0)} лет\n- "
+                                  f"пол {'мужской' if self.search_fields.get('sex', 0) == 0 else 'женский'}",
+                                  {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
         else:
-            user_info = self.client.get_user_info(event.object.user_id, "bdate,sex,city")[0]
-            if type(user_info) != vk_api.exceptions.ApiError:
-                city = user_info.get("city", {})
-                sex = user_info.get("sex", 0)
-                born = datetime.datetime.strptime(user_info.get("bdate", ""), "%d.%m.%Y")
-                age = calculate_age(born)
-
-                try:
-                    db.add_city_entry(session, city.get("id", 2), city.get("title", ""))
-                except BaseException as err:
-                    logging.warning(err.args)
-
-                db.add_client_info(session, event.object.user_id, age, sex, city.get("id", 2))
-
-                search_fields = {
-                    "city": city,
-                    "sex": 0 if sex == 1 else 1,
-                    "age_from": age,
-                    "age_to": age,
-                }
-                self.search_fields = search_fields
-
-                self.client.write_msg(event.object.user_id, f"Выполнить поиск по следующим данным?:\n- г. "
-                                                            f"{city.get('title', '')}\n- {age} лет\n- пол "
-                                                            f"{'мужской' if sex == 1 else 'женский'}",
-                                      {"keyboard": open(KB_SEARCH, 'r', encoding='UTF-8').read()})
-            else:
-                self.client.write_msg(event.obj.peer_id, f"Возникла ошибка {user_info.error}.\nПопробуйте еще раз",
-                                      {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
+            self.client.write_msg(event.obj.peer_id,
+                                  f"Возникла ошибка {self.search_fields.error}.\nПопробуйте еще раз",
+                                  {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
     def search_start(self, event):
@@ -390,7 +399,8 @@ class VKhandler:
             self.search_results = search_results
             self.rotation(event)
         else:
-            self.client.write_msg(event.obj.peer_id, f"Возникла ошибка {search_results.error}.\nПопробуйте еще раз",
+            self.client.write_msg(event.obj.peer_id,
+                                  f"Возникла ошибка {search_results.error}.\nПопробуйте еще раз",
                                   {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
@@ -420,16 +430,16 @@ class VKhandler:
                     "attachment": attachment
                 }
 
-                self.client.write_msg(event.object.user_id, f"{self.current_entry.get('first_name', '')} "
+                self.client.write_msg(event.object.user_id, f"\n{self.current_entry.get('first_name', '')} "
                                                             f"{self.current_entry.get('last_name', '')}" +
-                                      f"\n{self.current_entry.get('link', '')}",
+                                      f"{self.current_entry.get('link', '')}",
                                       {"attachment": self.current_entry.get("attachment", ""),
                                        "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
             else:
                 self.next_person(event)
         else:
-            self.client.write_msg(event.obj.peer_id, f"Вы достигли конца списка. Выполните поиск еще раз, чтобы "
-                                                     f"обновить выдачу",
+            self.client.write_msg(event.obj.peer_id,
+                                  f"Вы достигли конца списка. Выполните поиск еще раз, чтобы обновить выдачу",
                                   {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
     @logger
@@ -493,6 +503,13 @@ class VKhandler:
         city = self.user_client.get_city_id(event.obj.message['text'].split("город ")[1])
         self.search_fields["city"] = city
 
+        try:
+            db.add_city_entry(session, city.get("id", 2), city.get("title", ""))
+        except Exception as err:
+            logging.error(err)
+
+        db.add_client_info(session, event.obj.message['from_id'], **self.search_fields)
+
         self.client.write_msg(event.obj.message['from_id'], f"Город успешно изменен!\n"
                                                             f"Какой параметр вы хотите изменить?",
                               {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
@@ -524,6 +541,7 @@ class VKhandler:
         age_from, age_to = event.obj.message['text'].split("возраст ")[1].split("-")
         self.search_fields["age_from"] = age_from
         self.search_fields["age_to"] = age_to
+        db.add_client_info(session, event.obj.message['from_id'], **self.search_fields)
 
         self.client.write_msg(event.obj.message['from_id'], f"Возраст успешно изменен!\n"
                                                             f"Какой параметр вы хотите изменить?",
@@ -555,8 +573,10 @@ class VKhandler:
 
         sex = event.obj.message['text'].split("пол ")[1]
         self.search_fields["sex"] = 1 if sex == "мужской" else 0
+        db.add_client_info(session, event.obj.message['from_id'], **self.search_fields)
 
-        self.client.write_msg(event.obj.message['from_id'], f"Пол успешно изменен!\nКакой параметр вы хотите изменить?",
+        self.client.write_msg(event.obj.message['from_id'],
+                              f"Пол успешно изменен!\nКакой параметр вы хотите изменить?",
                               {"keyboard": open(KB_SETTINGS, 'r', encoding='UTF-8').read()})
 
     @logger
@@ -578,8 +598,8 @@ class VKhandler:
                                   f"Пользователь {self.current_entry.get('first_name', '')} "
                                   f"{self.current_entry.get('last_name', '')} добавлен в избранное",
                                   {"keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
-        except BaseException as err:
-            logging.error(err.args)
+        except Exception as err:
+            logging.error(err)
             self.client.write_msg(event.object.user_id,
                                   f"Пользователь {self.current_entry.get('first_name', '')} "
                                   f"{self.current_entry.get('last_name', '')} уже в избранном",
@@ -599,8 +619,8 @@ class VKhandler:
             self.fav_list = db.get_fav_list(session, event.object.user_id)
             self.client.write_msg(event.object.user_id, f"В каком виде вывести избранное?",
                                   {"keyboard": open(KB_LIST_FAV, 'r', encoding='UTF-8').read()})
-        except BaseException as err:
-            logging.error(err.args)
+        except Exception as err:
+            logging.error(err)
             self.client.write_msg(event.object.user_id, f"Вы никого не добавляли в избранное.",
                                   {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})
 
