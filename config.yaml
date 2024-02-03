@@ -1,6 +1,13 @@
+DB:
+  NAME: vkinder
+  PASSWORD:
+  PORT: 5432
+  PROTOCOL: postgresql
+  SERVER: localhost
+  USER:
 VK:
-  GROUP_TOKEN:
+  APP_ID:
   GROUP_ID:
+  GROUP_TOKEN:
   USER_TOKEN:
   VERSION: 5.199
-  APP_ID:

@@ -1,4 +1,4 @@
-from func.bot import *
+from func.bot import VKClient, VKhandler, VK_GROUP_TOKEN, VK_VERSION, VK_GROUP_ID
 from vk_api.bot_longpoll import VkBotLongPoll
 
 if __name__ == "__main__":

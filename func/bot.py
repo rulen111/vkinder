@@ -430,8 +430,9 @@ class VKhandler:
                     "attachment": attachment
                 }
 
-                self.client.write_msg(event.object.user_id, f"\n{self.current_entry.get('first_name', '')} "
-                                                            f"{self.current_entry.get('last_name', '')}" +
+                self.client.write_msg(event.object.user_id,
+                                      f"\n{self.current_entry.get('first_name', '')} "
+                                      f"{self.current_entry.get('last_name', '')}" +
                                       f"{self.current_entry.get('link', '')}",
                                       {"attachment": self.current_entry.get("attachment", ""),
                                        "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
@@ -638,9 +639,12 @@ class VKhandler:
             if (idx + 1) % 5 == 0:
                 time.sleep(1)
 
-            self.client.write_msg(event.object.user_id, f"- {entry.get('first_name', '')} "
-                                                        f"{entry.get('last_name', '')} "
-                                                        f"{entry.get('link', '')}")
+            self.client.write_msg(event.object.user_id,
+                                  f"\n{entry.get('first_name', '')} "
+                                  f"{entry.get('last_name', '')}" +
+                                  f"{entry.get('link', '')}",
+                                  {"attachment": entry.get("attachment", ""),
+                                   "keyboard": open(KB_CHOOSE, 'r', encoding='UTF-8').read()})
 
         self.client.write_msg(event.object.user_id, f"Конец списка",
                               {"keyboard": open(KB_MAIN, 'r', encoding='UTF-8').read()})

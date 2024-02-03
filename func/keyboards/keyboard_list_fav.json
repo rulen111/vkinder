@@ -6,7 +6,7 @@
         "action":{
           "type":"callback",
           "payload":"{\"type\": \"list_fav_list\"}",
-          "label":"Вывести список целиком (имя + ссылка)"
+          "label":"Вывести список целиком"
         },
         "color":"default"
       }
@@ -16,7 +16,7 @@
         "action":{
           "type":"callback",
           "payload":"{\"type\": \"list_fav_gallery\"}",
-          "label":"Вывести по 3 (имя + ссылка + фото)"
+          "label":"Вывести по 3"
         },
         "color":"default"
       }
