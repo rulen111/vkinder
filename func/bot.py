@@ -1,3 +1,5 @@
+import os
+
 import vk_api
 import yaml
 import logging
@@ -32,6 +34,9 @@ KB_SETTINGS = "func/keyboards/keyboard_settings.json"
 KB_AUTHORIZE = "func/keyboards/keyboard_authorize.json"
 KB_LIST_FAV = "func/keyboards/keyboard_list_fav.json"
 KB_LIST_FAV_GALLERY = "func/keyboards/keyboard_list_fav_gallery.json"
+
+if not os.path.exists("./logs"):
+    os.makedirs("./logs")
 
 logging.basicConfig(level=logging.INFO, filename=f'logs/{datetime.datetime.now().date()}.log',
                     filemode="a", format="%(asctime)s %(levelname)s %(message)s", encoding='UTF-8')
